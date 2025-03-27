@@ -1,20 +1,27 @@
-name: Build and Release
+name: Build and Upload Artifacts
 
 on:
   push:
     tags:
-      - 'v*'  # Runs only when you push a version tag (e.g., v1.0)
+      - "v*"
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-    
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Build Application
+        run: |
+          mkdir -p build
+          echo "Dummy Executable" > build/Spread_Pattern_Analysis-v1.0.exe
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Spread_Pattern_Analysis-${{ github.run_id }}"
+          path: ./build/
 
       - name: Set up Python
         uses: actions/setup-python@v5
