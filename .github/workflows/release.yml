@@ -115,7 +115,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.build.outputs.version }}
-          name: RSPA v${{ needs.build.outputs.version }}
+          name: v${{ needs.build.outputs.version }}
           files: release/v${{ needs.build.outputs.version }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
