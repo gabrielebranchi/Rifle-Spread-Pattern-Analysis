@@ -20,8 +20,8 @@ jobs:
       - name: Install dependencies
         run: npm install  # or `yarn install` / `pip install -r requirements.txt`
 
-      - name: Build project (adjust for your project)
-        run: npm run build  # Replace with your build command
+      - name: Build with electron-builder
+        run: npx electron-builder --linux --win --mac
 
       - name: Package artifacts (e.g., zip binaries)
         run: |
