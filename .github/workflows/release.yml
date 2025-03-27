@@ -1,9 +1,9 @@
-name: Create Release Assets
+name: Build and Release Assets
 
 on:
   push:
     tags:
-      - 'v*' # Trigger on version tags like v1.0.0
+      - 'v*'  # Pattern to match version tags like v1.0.0
 
 jobs:
   build:
@@ -14,73 +14,81 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
         include:
           - os: macos-latest
-            artifact: macx-arm64-Release.dmg
-            build_script: scripts/build-mac-arm64.sh
+            artifact_name: macx-arm64-Release.dmg
+            build_script: ./scripts/build-mac-arm64.sh
+            artifact_path: ./build/Spread_Pattern_Analysis-*-macx-arm64-Release.dmg
           - os: macos-latest
-            artifact: macx-x86_64-Release.dmg
-            build_script: scripts/build-mac-x86.sh
+            artifact_name: macx-x86_64-Release.dmg
+            build_script: ./scripts/build-mac-x86.sh
+            artifact_path: ./build/Spread_Pattern_Analysis-*-macx-x86_64-Release.dmg
           - os: windows-latest
-            artifact: win64-Release.exe
-            build_script: scripts/build-windows.ps1
+            artifact_name: win64-Release.exe
+            build_script: ./scripts/build-windows.ps1
+            artifact_path: ./build/Spread_Pattern_Analysis-*-win64-Release.exe
           - os: ubuntu-latest
-            artifact: x86_64-Release.AppImage
-            build_script: scripts/build-linux.sh
+            artifact_name: x86_64-Release.AppImage
+            build_script: ./scripts/build-linux.sh
+            artifact_path: ./build/Spread_Pattern_Analysis-*-x86_64-Release.AppImage
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Set up build environment
+
+      - name: Setup build environment
         run: |
-          echo "Setting up build environment for ${{ runner.os }}..."
+          echo "Setting up ${{ runner.os }} environment..."
           if [[ "${{ runner.os }}" == "Linux" ]]; then
             sudo apt-get update
-            sudo apt-get install -y build-essential
+            sudo apt-get install -y build-essential libgl1-mesa-dev
           elif [[ "${{ runner.os }}" == "macOS" ]]; then
             brew update
             brew install cmake
           elif [[ "${{ runner.os }}" == "Windows" ]]; then
             choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
           fi
-      
-      - name: Make build script executable (Linux/Mac)
+
+      - name: Make scripts executable
         if: runner.os != 'Windows'
         run: chmod +x ${{ matrix.build_script }}
-      
-      - name: Build artifact
+
+      - name: Run build script
         run: |
-          echo "Running build script: ${{ matrix.build_script }}"
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            pwsh -Command "& { ${{ matrix.build_script }}"
+            pwsh -Command "& '${{ matrix.build_script }}'"
           else
             ${{ matrix.build_script }}
           fi
-          
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
-          path: ${{ github.workspace }}/build/Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
+          name: Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
 
-  release:
+  create-release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          
-      - name: Create Release
+          path: ./artifacts
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release v${{ github.ref_name }}
-          body: Automated release with multi-platform binaries
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            Automated release containing:
+            - macOS (ARM64) DMG
+            - macOS (x86_64) DMG
+            - Windows EXE
+            - Linux AppImage
           files: |
             artifacts/Spread_Pattern_Analysis-v${{ github.ref_name }}-*.dmg
             artifacts/Spread_Pattern_Analysis-v${{ github.ref_name }}-*.exe
             artifacts/Spread_Pattern_Analysis-v${{ github.ref_name }}-*.AppImage
+          draft: false
+          prerelease: false
