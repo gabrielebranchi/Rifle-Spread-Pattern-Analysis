@@ -3,7 +3,7 @@ name: Release Builds
 on:
   push:
     tags:
-      - "v*"  # Triggers on tags like v1.0.0
+      - "v*"
 
 jobs:
   build:
@@ -24,6 +24,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
+          # Reinstall Pillow with universal2 support (macOS only)
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            pip uninstall -y pillow
+            pip install --no-binary :all: --compile --force-reinstall pillow
+          fi
           pip install -r requirements.txt
 
       - name: Build executable
@@ -38,9 +43,13 @@ jobs:
             # Native ARM64 build
             mv dist/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
             
-            # Build x86_64 binary using Rosetta 2
+            # Build x86_64 binary with explicit arch flag
             echo "Building x86_64 version..."
-            arch -x86_64 python -m PyInstaller --onefile --name=rifle_spread_analysis_x86 main.py
+            arch -x86_64 python -m PyInstaller \
+              --onefile \
+              --name=rifle_spread_analysis_x86 \
+              --target-arch=x86_64 \
+              main.py
             mv dist/rifle_spread_analysis_x86 release/rifle_spread_analysis-macos-x86_64
           else  # Linux
             mv dist/rifle_spread_analysis release/rifle_spread_analysis-linux-x86_64
@@ -58,7 +67,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download all build artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -72,6 +81,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: combined-release/*
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
