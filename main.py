@@ -8,6 +8,20 @@ import math
 import threading
 import random
 
+import gettext
+import locale
+import os
+
+# Set up translations
+locale.setlocale(locale.LC_ALL, '')
+LOCALE_DIR = os.path.join(os.path.dirname(__file__), 'locales')
+
+# Default to Italian
+lang = 'it'
+translation = gettext.translation('messages', LOCALE_DIR, languages=[lang], fallback=True)
+translation.install()
+_ = translation.gettext
+
 # Imposta il metodo di resampling in base alla versione di Pillow
 try:
     resample_method = Image.Resampling.LANCZOS
