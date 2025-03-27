@@ -1,0 +1,18 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Analisi Colpi su Bersaglio"
+msgstr "Bullet Hole Analysis"
+
+msgid "Seleziona Immagine"
+msgstr "Select Image"
+
+msgid "Analizza Colpi"
+msgstr "Analyze Shots"
+
+msgid "Export Immagine"
+msgstr "Export Image"
+
+# Add all other Italian strings from your GUI here
