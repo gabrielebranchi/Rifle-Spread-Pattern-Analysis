@@ -1,9 +1,9 @@
-name: Release Automation
+name: Publish Python Package
 
 on:
   push:
     tags:
-      - "v*"  # Triggers on tags like v1.0.0
+      - "v*"  # e.g., v1.0.0
 
 jobs:
   build-and-release:
@@ -12,29 +12,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js (if applicable)
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: "20"
+          python-version: "3.10"
 
       - name: Install dependencies
-        run: npm install  # or `yarn install` / `pip install -r requirements.txt`
-
-      - name: Build with electron-builder
-        run: npx electron-builder --linux --win --mac
-
-      - name: Package artifacts (e.g., zip binaries)
         run: |
-          mkdir -p release
-          zip -r release/myapp-linux.zip dist/  # Example for Linux
-          zip -r release/myapp-windows.zip build/  # Example for Windows
+          python -m pip install --upgrade pip
+          pip install setuptools wheel
 
-      - name: Create GitHub Release & Upload Assets
+      - name: Build Python package
+        run: python setup.py sdist bdist_wheel
+
+      - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            release/myapp-linux.zip
-            release/myapp-windows.zip
-          generate_release_notes: true  # Auto-generate changelog
+          files: dist/*
+          generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Auto-provided by GitHub
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
