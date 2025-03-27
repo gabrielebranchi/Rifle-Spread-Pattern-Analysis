@@ -17,6 +17,9 @@ Questo software permette di analizzare un'immagine di un bersaglio e rilevare i 
   - `numpy`
   - `Pillow`
   - `tkinter`
+  - `math`
+  - `threading`
+  - `random`
 
 Puoi installare le dipendenze con il comando:
 ```sh
