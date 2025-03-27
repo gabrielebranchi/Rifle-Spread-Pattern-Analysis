@@ -27,10 +27,13 @@ jobs:
 
       - name: Build macOS app and dmg
         run: |
+          # Build the macOS app
           pyinstaller --onefile --name Spread_Pattern_Analysis --distpath dist main.py
-          mkdir dist/Spread_Pattern_Analysis.app  # Create app bundle for dmg creation
-          mv dist/Spread_Pattern_Analysis dist/Spread_Pattern_Analysis.app/Contents/MacOS/
           
+          # Move the app bundle into the right structure for create-dmg
+          mkdir dist/Spread_Pattern_Analysis.app
+          mv dist/Spread_Pattern_Analysis dist/Spread_Pattern_Analysis.app/Contents/MacOS/
+
           # Create the DMG using create-dmg
           create-dmg dist/Spread_Pattern_Analysis.app Spread_Pattern_Analysis-${{ github.ref_name }}-macx-${{ matrix.arch }}-Release.dmg
 
