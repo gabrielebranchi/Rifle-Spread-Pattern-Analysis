@@ -1,123 +1,149 @@
-name: Build & Release
+name: Node CI
 
 on:
   push:
     tags:
-      - 'v*'  # Run only when a new version tag is pushed
+      - 'v*'
 
 jobs:
+  upload-release:
+
+    runs-on: ubuntu-latest
+    needs: [build-macos, build-linux, build-windows]
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: create release
+      id: create_release
+      uses: actions/create-release@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false   
+    - name: download artifacts
+      uses: actions/download-artifact@v1
+      with:
+        name: uploads    
+    - name: upload macos
+      id: upload-macos 
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/macos.zip
+        asset_name: macos.zip
+        asset_content_type: application/zip  
+    - name: upload linux
+      id: upload-linux
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/linux.zip
+        asset_name: linux.zip
+        asset_content_type: application/zip   
+    - name: upload windows
+      id: upload-windows
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/windows.zip
+        asset_name: windows.zip
+        asset_content_type: application/zip                        
+
   build-macos:
-    runs-on: macos-14
+
+    runs-on: macOS-latest
+
     strategy:
       matrix:
-        arch: [arm64, x86_64]
+        node-version: [12.x]
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          brew install create-dmg pyinstaller  # Install create-dmg via Homebrew
-
-      - name: Build macOS app and dmg
-        run: |
-          # Build the macOS app
-          pyinstaller --onefile --name Spread_Pattern_Analysis --distpath dist main.py
-          
-          # Move the app bundle into the right structure for create-dmg
-          mkdir dist/Spread_Pattern_Analysis.app
-          mv dist/Spread_Pattern_Analysis dist/Spread_Pattern_Analysis.app/Contents/MacOS/
-
-          # Create the DMG using create-dmg
-          create-dmg dist/Spread_Pattern_Analysis.app Spread_Pattern_Analysis-${{ github.ref_name }}-macx-${{ matrix.arch }}-Release.dmg
-
-      - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macOS-${{ matrix.arch }}
-          path: Spread_Pattern_Analysis-${{ github.ref_name }}-macx-${{ matrix.arch }}-Release.dmg
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt pyinstaller
-
-      - name: Build Windows executable
-        run: |
-          pyinstaller --onefile --name Spread_Pattern_Analysis --distpath dist main.py
-          mv dist/Spread_Pattern_Analysis.exe Spread_Pattern_Analysis-${{ github.ref_name }}-win64-Release.exe
-
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Windows
-          path: Spread_Pattern_Analysis-*-win64-Release.exe
+    - uses: actions/checkout@v1
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: npm install, build, and test
+      run: |
+        npm ci
+        npm test
+    - name: npm run build
+      run: |
+        npm run build
+    - name: zip macos artifact
+      run: |
+        zip -r macos out 
+    - name: upload macos artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: uploads
+        path: macos.zip                    
 
   build-linux:
+
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [12.x]
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v1
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: npm install, build, and test
+      run: |
+        npm ci
+        npm test
+    - name: npm run build
+      run: |
+        npm run build
+    - name: zip linux artifact
+      run: |
+        zip -r linux out  
+    - name: upload linux artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: uploads
+        path: linux.zip        
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+  build-windows:
 
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y p7zip-full
-          pip install -r requirements.txt pyinstaller
+    runs-on: windows-latest
 
-      - name: Build Linux AppImage
-        run: |
-          pyinstaller --onefile --name Spread_Pattern_Analysis --distpath dist main.py
-          mv dist/Spread_Pattern_Analysis Spread_Pattern_Analysis-${{ github.ref_name }}-x86_64-Release.AppImage
+    strategy:
+      matrix:
+        node-version: [12.x]
 
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Linux
-          path: Spread_Pattern_Analysis-*-x86_64-Release.AppImage
-
-  create-release:
-    needs: [build-macos, build-windows, build-linux]
-    runs-on: ubuntu-latest
     steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Zip Source Code
-        run: |
-          git archive --format=zip --output=Spread_Pattern_Analysis-${{ github.ref_name }}-source.zip HEAD
-          git archive --format=tar.gz --output=Spread_Pattern_Analysis-${{ github.ref_name }}-source.tar.gz HEAD
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            artifacts/macOS-arm64/*
-            artifacts/macOS-x86_64/*
-            artifacts/Windows/*
-            artifacts/Linux/*
-            Spread_Pattern_Analysis-${{ github.ref_name }}-source.zip
-            Spread_Pattern_Analysis-${{ github.ref_name }}-source.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - uses: actions/checkout@v1
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: npm install, build, and test
+      run: |
+        npm ci
+        npm test
+    - name: npm run build
+      run: |
+        npm run build
+    - name: zip win artifact
+      run: |
+        powershell Compress-Archive out windows.zip 
+    - name: upload windows artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: uploads
+        path: windows.zip
