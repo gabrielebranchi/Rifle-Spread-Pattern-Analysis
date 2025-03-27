@@ -14,31 +14,51 @@ jobs:
         include:
           - os: macos-latest
             artifact: macx-arm64-Release.dmg
-            build_command: make build-mac-arm64
+            build_script: build-mac-arm64.sh
           - os: macos-latest
             artifact: macx-x86_64-Release.dmg
-            build_command: make build-mac-x86
+            build_script: build-mac-x86.sh
           - os: windows-latest
             artifact: win64-Release.exe
-            build_command: make build-windows
+            build_script: build-windows.ps1
           - os: ubuntu-latest
             artifact: x86_64-Release.AppImage
-            build_command: make build-linux
+            build_script: build-linux.sh
 
     steps:
       - uses: actions/checkout@v4
       
       - name: Set up build environment
-        run: # Add your build environment setup here
-        
-      - name: Build
-        run: ${{ matrix.build_command }}
-        
+        run: |
+          echo "Setting up build environment..."
+          # Add your environment setup commands here
+          # For example:
+          # brew install packages (on macOS)
+          # sudo apt-get install packages (on Ubuntu)
+          # choco install packages (on Windows)
+      
+      - name: Make build script executable (Linux/Mac)
+        if: runner.os != 'Windows'
+        run: chmod +x ${{ matrix.build_script }}
+      
+      - name: Build artifact
+        run: |
+          echo "Running build script..."
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            powershell ./${{ matrix.build_script }}
+          else
+            ./${{ matrix.build_script }}
+          fi
+          
+      - name: Rename artifact
+        run: |
+          mv built-artifact Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
+          
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
-          path: path/to/built/artifact
+          path: Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
 
   release:
     needs: build
@@ -48,16 +68,16 @@ jobs:
       
       - name: Download all artifacts
         uses: actions/download-artifact@v3
-        
+        with:
+          path: artifacts
+          
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref }}
           release_name: Release v${{ github.ref_name }}
-          body: Release notes here
+          body: Automated release with multi-platform binaries
           files: |
-            Spread_Pattern_Analysis-v${{ github.ref_name }}-*.dmg
-            Spread_Pattern_Analysis-v${{ github.ref_name }}-*.exe
-            Spread_Pattern_Analysis-v${{ github.ref_name }}-*.AppImage
-          draft: false
-          prerelease: false
+            artifacts/Spread_Pattern_Analysis-v${{ github.ref_name }}-*.dmg
+            artifacts/Spread_Pattern_Analysis-v${{ github.ref_name }}-*.exe
+            artifacts/Spread_Pattern_Analysis-v${{ github.ref_name }}-*.AppImage
