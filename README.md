@@ -26,6 +26,10 @@ Puoi installare le dipendenze con il comando:
 pip install opencv-python numpy Pillow
 ```
 
+Tkinter è integrato con ogni installazione di Python,
+quindi se viene visualizzato l'errore di mancanza dipendeza Tkinter
+provare a reinstallare Python
+
 ## Istruzioni per l'Uso
 
 1. **Avvia il programma**
