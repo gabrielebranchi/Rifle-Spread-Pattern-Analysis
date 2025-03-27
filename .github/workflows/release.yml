@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-12]  # macos-12 is x86_64
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -20,33 +20,44 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install universal dependencies (macOS only)
+        if: matrix.os == 'macOS-latest'
+        run: |
+          # Force universal2 wheels for key packages
+          pip install --upgrade pip
+          pip uninstall -y pillow numpy
+          pip install --no-binary :all: --compile pillow
+          pip install numpy --no-binary numpy
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install pyinstaller
           pip install -r requirements.txt
-          # Fix numpy/OpenCV issues
-          pip install --force-reinstall numpy opencv-python-headless
 
       - name: Build executable
         shell: bash
         run: |
-          pyinstaller --onefile --name=rifle_spread_analysis main.py
-          mkdir -p release
-          
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            mv dist/rifle_spread_analysis.exe release/rifle_spread_analysis-windows-x86_64.exe
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            # On x86_64 runner, we get native x86_64 build
-            mv dist/rifle_spread_analysis release/rifle_spread_analysis-macos-x86_64
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            # Build universal2 binary
+            python -m PyInstaller \
+              --onefile \
+              --name=rifle_spread_analysis_universal \
+              --target-arch universal2 \
+              main.py
             
-            # Now build ARM64 version using cross-compilation
-            echo "Building ARM64 version..."
-            pip install --force-reinstall --no-binary :all: pillow
-            export PYTHON_CONFIGURE_OPTS="--enable-universalsdk --with-universal-archs=arm64"
-            python -m PyInstaller --onefile --name=rifle_spread_analysis_arm main.py
-            mv dist/rifle_spread_analysis_arm release/rifle_spread_analysis-macos-arm64
-          else  # Linux
+            mkdir -p release
+            mv dist/rifle_spread_analysis_universal release/rifle_spread_analysis-macos-universal
+            
+            # Create separate arm64 and x86_64 copies
+            cp release/rifle_spread_analysis-macos-universal release/rifle_spread_analysis-macos-arm64
+            cp release/rifle_spread_analysis-macos-universal release/rifle_spread_analysis-macos-x86_64
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            pyinstaller --onefile --name=rifle_spread_analysis main.py
+            mkdir -p release
+            mv dist/rifle_spread_analysis.exe release/rifle_spread_analysis-windows-x86_64.exe
+          else
+            pyinstaller --onefile --name=rifle_spread_analysis main.py
+            mkdir -p release
             mv dist/rifle_spread_analysis release/rifle_spread_analysis-linux-x86_64
           fi
 
