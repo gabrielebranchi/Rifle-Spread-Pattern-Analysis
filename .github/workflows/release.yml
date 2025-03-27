@@ -1,0 +1,40 @@
+name: Release Automation
+
+on:
+  push:
+    tags:
+      - "v*"  # Triggers on tags like v1.0.0
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (if applicable)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install  # or `yarn install` / `pip install -r requirements.txt`
+
+      - name: Build project (adjust for your project)
+        run: npm run build  # Replace with your build command
+
+      - name: Package artifacts (e.g., zip binaries)
+        run: |
+          mkdir -p release
+          zip -r release/myapp-linux.zip dist/  # Example for Linux
+          zip -r release/myapp-windows.zip build/  # Example for Windows
+
+      - name: Create GitHub Release & Upload Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/myapp-linux.zip
+            release/myapp-windows.zip
+          generate_release_notes: true  # Auto-generate changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Auto-provided by GitHub
