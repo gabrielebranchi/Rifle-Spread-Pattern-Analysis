@@ -14,6 +14,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        id: checkout
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,14 +30,7 @@ jobs:
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
         run: |
-          # Install only if not already present
-          brew list libtiff &>/dev/null || brew install libtiff
-          brew list libjpeg &>/dev/null || brew install libjpeg
-          brew list webp &>/dev/null || brew install webp
-          brew list little-cms2 &>/dev/null || brew install little-cms2
-          brew list openssl@1.1 &>/dev/null || brew install openssl@1.1
-          
-          # Set environment variables
+          brew install libtiff libjpeg webp little-cms2 openssl@1.1 2>/dev/null || true
           export LDFLAGS="-L$(brew --prefix openssl@1.1)/lib"
           export CPPFLAGS="-I$(brew --prefix openssl@1.1)/include"
 
@@ -43,7 +43,7 @@ jobs:
           pip install numpy pillow pyinstaller -r requirements.txt
           python -m PyInstaller \
             --onefile \
-            --name=rifle_spread_analysis_arm \
+            --name=RSPA_arm64 \
             --target-arch arm64 \
             --distpath arm64_dist \
             --workpath arm64_build \
@@ -55,26 +55,28 @@ jobs:
           arch -x86_64 pip install numpy pillow pyinstaller -r requirements.txt
           arch -x86_64 python -m PyInstaller \
             --onefile \
-            --name=rifle_spread_analysis_x86 \
+            --name=RSPA_x86_64 \
             --target-arch x86_64 \
             --distpath x86_dist \
             --workpath x86_build \
             main.py
           deactivate
           
+          # Create versioned release directory
+          mkdir -p release/v${{ steps.version.outputs.version }}
+          
           # Create universal binary using lipo
-          mkdir -p release
           lipo -create \
-            -output release/rifle_spread_analysis-macos-universal \
-            arm64_dist/rifle_spread_analysis_arm \
-            x86_dist/rifle_spread_analysis_x86
+            -output release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-universal \
+            arm64_dist/RSPA_arm64 \
+            x86_dist/RSPA_x86_64
           
           # Create architecture-specific copies
-          cp arm64_dist/rifle_spread_analysis_arm release/rifle_spread_analysis-macos-arm64
-          cp x86_dist/rifle_spread_analysis_x86 release/rifle_spread_analysis-macos-x86_64
+          cp arm64_dist/RSPA_arm64 release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-arm64
+          cp x86_dist/RSPA_x86_64 release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-x86_64
           
           # Make executable
-          chmod +x release/rifle_spread_analysis-macos-*
+          chmod +x release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-*
 
       - name: Build Windows executable
         if: runner.os == 'Windows'
@@ -82,18 +84,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt
-          pyinstaller --onefile --name=rifle_spread_analysis main.py
-          mkdir -p release
-          Move-Item dist/rifle_spread_analysis.exe release/rifle_spread_analysis-windows-x86_64.exe
+          pyinstaller --onefile --name=RSPA main.py
+          mkdir -p release/v${{ steps.version.outputs.version }}
+          Move-Item dist/RSPA.exe release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-windows-x86_64.exe
 
       - name: Build Linux executable
         if: runner.os == 'Linux'
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt
-          pyinstaller --onefile --name=rifle_spread_analysis main.py
-          mkdir -p release
-          mv dist/rifle_spread_analysis release/rifle_spread_analysis-linux-x86_64
+          pyinstaller --onefile --name=RSPA main.py
+          mkdir -p release/v${{ steps.version.outputs.version }}
+          mv dist/RSPA release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-linux-x86_64
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -114,12 +116,16 @@ jobs:
 
       - name: Combine artifacts
         run: |
-          mkdir -p combined-release
-          find artifacts -name "rifle_spread_analysis*" -exec cp {} combined-release/ \;
+          # Create versioned release directory
+          mkdir -p release/v${{ needs.build.outputs.version }}
+          
+          # Find and copy all versioned assets
+          find artifacts -name "RSPA-*" -exec cp {} release/v${{ needs.build.outputs.version }}/ \;
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: combined-release/*
+          tag_name: v${{ needs.build.outputs.version }}
+          files: release/v${{ needs.build.outputs.version }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
