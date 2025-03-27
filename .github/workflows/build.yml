@@ -1,0 +1,76 @@
+name: Build and Release Spread Pattern Analysis
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-14, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: Spread_Pattern_Analysis-${{ github.ref_name }}--x86_64-Release.AppImage
+            build_script: pyinstaller --onefile --name "Spread_Pattern_Analysis" main.py && mv dist/Spread_Pattern_Analysis dist/Spread_Pattern_Analysis.AppImage
+
+          - os: macos-latest
+            artifact_name: Spread_Pattern_Analysis-${{ github.ref_name }}-macx-x86_64-Release.dmg
+            build_script: pyinstaller --onefile --windowed --name "Spread_Pattern_Analysis" main.py && hdiutil create -volname Spread_Pattern_Analysis -srcfolder dist -format UDZO -o dist/Spread_Pattern_Analysis.dmg
+
+          - os: macos-14
+            artifact_name: Spread_Pattern_Analysis-${{ github.ref_name }}-macx-arm64-Release.dmg
+            build_script: pyinstaller --onefile --windowed --name "Spread_Pattern_Analysis" main.py && hdiutil create -volname Spread_Pattern_Analysis -srcfolder dist -format UDZO -o dist/Spread_Pattern_Analysis.dmg
+
+          - os: windows-latest
+            artifact_name: Spread_Pattern_Analysis-${{ github.ref_name }}--win64-Release.exe
+            build_script: pyinstaller --onefile --windowed --name "Spread_Pattern_Analysis" main.py
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build Executable
+        run: ${{ matrix.build_script }}
+
+      - name: Rename and Upload Artifact
+        run: mv dist/* ${{ matrix.artifact_name }}
+        
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Source Code Archives
+        run: |
+          zip -r "Source code (zip).zip" .
+          tar -czvf "Source code (tar.gz).tar.gz" .
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Spread_Pattern_Analysis-*
+            Source code (zip).zip
+            Source code (tar.gz).tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
