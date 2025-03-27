@@ -11,6 +11,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,7 +22,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "TAG_VERSION=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${VERSION}"
         shell: bash
 
       - name: Set up Python
@@ -35,58 +37,53 @@ jobs:
           export LDFLAGS="-L$(brew --prefix openssl@1.1)/lib"
           export CPPFLAGS="-I$(brew --prefix openssl@1.1)/include"
 
-      - name: Build macOS universal binary
-        if: runner.os == 'macOS'
+      - name: Build binaries
+        shell: bash
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          mkdir -p release/v${VERSION}
+          echo "Building version: ${VERSION}"
           
-          # ARM64 build
-          python -m venv arm64_env
-          source arm64_env/bin/activate
-          pip install numpy pillow pyinstaller -r requirements.txt
-          python -m PyInstaller --onefile --name=RSPA --distpath=arm64_dist main.py
-          deactivate
-          
-          # x86_64 build
-          python -m venv x86_env
-          source x86_env/bin/activate
-          arch -x86_64 pip install numpy pillow pyinstaller -r requirements.txt
-          arch -x86_64 python -m PyInstaller --onefile --name=RSPA --distpath=x86_dist main.py
-          deactivate
-          
-          # Combine binaries
-          lipo -create -output release/v${VERSION}/RSPA-${VERSION}-macos-universal arm64_dist/RSPA x86_dist/RSPA
-          cp arm64_dist/RSPA release/v${VERSION}/RSPA-${VERSION}-macos-arm64
-          cp x86_dist/RSPA release/v${VERSION}/RSPA-${VERSION}-macos-x86_64
-          chmod +x release/v${VERSION}/RSPA-${VERSION}-macos-*
-
-      - name: Build Windows executable
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $VERSION = "${{ steps.version.outputs.VERSION }}"
-          python -m pip install --upgrade pip
-          pip install pyinstaller -r requirements.txt
-          pyinstaller --onefile --name=RSPA main.py
-          New-Item -ItemType Directory -Path "release/v$VERSION" -Force
-          Move-Item dist/RSPA.exe "release/v$VERSION/RSPA-$VERSION-windows-x86_64.exe"
-
-      - name: Build Linux executable
-        if: runner.os == 'Linux'
-        run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
-          python -m pip install --upgrade pip
-          pip install pyinstaller -r requirements.txt
-          pyinstaller --onefile --name=RSPA main.py
-          mkdir -p release/v${VERSION}
-          mv dist/RSPA release/v${VERSION}/RSPA-${VERSION}-linux-x86_64
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            # Build both architectures
+            python -m venv arm64_env
+            source arm64_env/bin/activate
+            pip install numpy pillow pyinstaller -r requirements.txt
+            python -m PyInstaller --onefile --name=RSPA --distpath=arm64_dist main.py
+            deactivate
+            
+            python -m venv x86_env
+            source x86_env/bin/activate
+            arch -x86_64 pip install numpy pillow pyinstaller -r requirements.txt
+            arch -x86_64 python -m PyInstaller --onefile --name=RSPA --distpath=x86_dist main.py
+            deactivate
+            
+            # Combine and prepare release assets
+            mkdir -p release_assets
+            lipo -create -output release_assets/RSPA-${VERSION}-macos-universal arm64_dist/RSPA x86_dist/RSPA
+            cp arm64_dist/RSPA release_assets/RSPA-${VERSION}-macos-arm64
+            cp x86_dist/RSPA release_assets/RSPA-${VERSION}-macos-x86_64
+            chmod +x release_assets/RSPA-${VERSION}-macos-*
+            
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            python -m pip install --upgrade pip
+            pip install pyinstaller -r requirements.txt
+            pyinstaller --onefile --name=RSPA main.py
+            mkdir -p release_assets
+            cp dist/RSPA.exe release_assets/RSPA-${VERSION}-windows-x86_64.exe
+            
+          else # Linux
+            python -m pip install --upgrade pip
+            pip install pyinstaller -r requirements.txt
+            pyinstaller --onefile --name=RSPA main.py
+            mkdir -p release_assets
+            cp dist/RSPA release_assets/RSPA-${VERSION}-linux-x86_64
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.os }}
-          path: release/
+          name: release_assets-${{ matrix.os }}
+          path: release_assets/
 
   release:
     needs: build
@@ -94,21 +91,31 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Combine artifacts
+      - name: Prepare release assets
         run: |
-          VERSION=${{ needs.build.outputs.VERSION }}
+          VERSION=${{ needs.build.outputs.version }}
+          echo "Preparing release for version: ${VERSION}"
+          
+          # Create combined release directory
           mkdir -p release/v${VERSION}
+          
+          # Find and copy all assets
           find artifacts -name "RSPA-*" -exec cp {} release/v${VERSION}/ \;
+          
+          # Verify files
+          echo "Release files:"
+          ls -la release/v${VERSION}/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ needs.build.outputs.VERSION }}
-          files: release/v${{ needs.build.outputs.VERSION }}/*
+          tag_name: v${{ needs.build.outputs.version }}
+          name: RSPA v${{ needs.build.outputs.version }}
+          files: release/v${{ needs.build.outputs.version }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
