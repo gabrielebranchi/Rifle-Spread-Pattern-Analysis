@@ -20,40 +20,49 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install universal dependencies (macOS only)
+      - name: Install macOS build dependencies
         if: matrix.os == 'macOS-latest'
         run: |
-          # Install build dependencies
-          brew install libtiff libjpeg webp little-cms2
+          # Install Homebrew if not present
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "$(brew --prefix)/opt" >> $GITHUB_PATH
           
-          # Force universal2 builds for key packages
-          pip install --upgrade pip
-          pip uninstall -y numpy pillow
-          export ARCHFLAGS="-arch x86_64 -arch arm64"
-          pip install numpy --no-binary numpy
-          pip install pillow --no-binary pillow
+          # Install required libraries
+          brew install libtiff libjpeg webp little-cms2 openssl@1.1
+          export LDFLAGS="-L$(brew --prefix openssl@1.1)/lib"
+          export CPPFLAGS="-I$(brew --prefix openssl@1.1)/include"
 
-      - name: Install other dependencies
+      - name: Install Python dependencies
         run: |
-          pip install pyinstaller
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            # Force universal2 builds for key packages
+            export ARCHFLAGS="-arch arm64 -arch x86_64"
+            pip install numpy --no-binary numpy --force-reinstall
+            pip install pillow --no-binary pillow --force-reinstall
+          fi
+          pip install pyinstaller -r requirements.txt
 
       - name: Build executable
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
-            # Build universal2 binary
-            export ARCHFLAGS="-arch x86_64 -arch arm64"
+            # Verify numpy is universal
+            file $(python -c "import numpy._core._multiarray_umath; print(numpy._core._multiarray_umath.__file__)")
+            
+            # Build universal binary
             python -m PyInstaller \
               --onefile \
               --name=rifle_spread_analysis \
               --target-arch universal2 \
+              --workpath build_macos \
+              --distpath dist_macos \
               main.py
             
             mkdir -p release
-            cp dist/rifle_spread_analysis release/rifle_spread_analysis-macos-universal
-            cp dist/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
-            cp dist/rifle_spread_analysis release/rifle_spread_analysis-macos-x86_64
+            cp dist_macos/rifle_spread_analysis release/rifle_spread_analysis-macos-universal
+            cp dist_macos/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
+            cp dist_macos/rifle_spread_analysis release/rifle_spread_analysis-macos-x86_64
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
             pyinstaller --onefile --name=rifle_spread_analysis main.py
             mkdir -p release
