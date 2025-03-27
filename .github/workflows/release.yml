@@ -27,14 +27,6 @@ jobs:
           export LDFLAGS="-L$(brew --prefix openssl@1.1)/lib"
           export CPPFLAGS="-I$(brew --prefix openssl@1.1)/include"
 
-      - name: Install Python dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          python -m pip install --upgrade pip
-          # Install numpy and pillow normally (will be arm64 by default)
-          pip install numpy pillow
-          pip install pyinstaller -r requirements.txt
-
       - name: Build macOS universal binary
         if: runner.os == 'macOS'
         run: |
@@ -42,25 +34,37 @@ jobs:
           python -m venv arm64_env
           source arm64_env/bin/activate
           pip install numpy pillow pyinstaller -r requirements.txt
-          python -m PyInstaller --onefile --name=rifle_spread_analysis_arm --target-arch arm64 main.py
+          python -m PyInstaller \
+            --onefile \
+            --name=rifle_spread_analysis_arm \
+            --target-arch arm64 \
+            --distpath arm64_dist \
+            --workpath arm64_build \
+            main.py
           deactivate
           
           python -m venv x86_env
           source x86_env/bin/activate
           arch -x86_64 pip install numpy pillow pyinstaller -r requirements.txt
-          arch -x86_64 python -m PyInstaller --onefile --name=rifle_spread_analysis_x86 --target-arch x86_64 main.py
+          arch -x86_64 python -m PyInstaller \
+            --onefile \
+            --name=rifle_spread_analysis_x86 \
+            --target-arch x86_64 \
+            --distpath x86_dist \
+            --workpath x86_build \
+            main.py
           deactivate
           
           # Create universal binary using lipo
           mkdir -p release
           lipo -create \
             -output release/rifle_spread_analysis-macos-universal \
-            arm64_env/dist/rifle_spread_analysis_arm \
-            x86_env/dist/rifle_spread_analysis_x86
+            arm64_dist/rifle_spread_analysis_arm \
+            x86_dist/rifle_spread_analysis_x86
           
           # Create architecture-specific copies
-          cp arm64_env/dist/rifle_spread_analysis_arm release/rifle_spread_analysis-macos-arm64
-          cp x86_env/dist/rifle_spread_analysis_x86 release/rifle_spread_analysis-macos-x86_64
+          cp arm64_dist/rifle_spread_analysis_arm release/rifle_spread_analysis-macos-arm64
+          cp x86_dist/rifle_spread_analysis_x86 release/rifle_spread_analysis-macos-x86_64
           
           # Make executable
           chmod +x release/rifle_spread_analysis-macos-*
