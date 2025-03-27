@@ -1,7 +1,4 @@
 # Rifle_Spread_Pattern_Analysis
-Software to calculate the spread of bullet holes in a target
-
-# Analisi Colpi su Bersaglio
 
 ## Descrizione
 Questo software permette di analizzare un'immagine di un bersaglio e rilevare i colpi sparati. Inoltre, calcola e disegna la circonferenza con diametro minimo che contiene una determinata percentuale di colpi più vicini tra loro, escludendo quelli più vicini al centro.
