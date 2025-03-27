@@ -1,5 +1,0 @@
-- name: Upload artifact
-  uses: actions/upload-artifact@v4
-  with:
-    name: "Spread_Pattern_Analysis-${{ github.run_id }}"
-    path: ./build/
