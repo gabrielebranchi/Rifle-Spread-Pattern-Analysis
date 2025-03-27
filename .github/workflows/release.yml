@@ -23,13 +23,17 @@ jobs:
       - name: Install universal dependencies (macOS only)
         if: matrix.os == 'macOS-latest'
         run: |
-          # Force universal2 wheels for key packages
+          # Install build dependencies
+          brew install libtiff libjpeg webp little-cms2
+          
+          # Force universal2 builds for key packages
           pip install --upgrade pip
-          pip uninstall -y pillow numpy
-          pip install --no-binary :all: --compile pillow
+          pip uninstall -y numpy pillow
+          export ARCHFLAGS="-arch x86_64 -arch arm64"
           pip install numpy --no-binary numpy
+          pip install pillow --no-binary pillow
 
-      - name: Install dependencies
+      - name: Install other dependencies
         run: |
           pip install pyinstaller
           pip install -r requirements.txt
@@ -39,18 +43,17 @@ jobs:
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             # Build universal2 binary
+            export ARCHFLAGS="-arch x86_64 -arch arm64"
             python -m PyInstaller \
               --onefile \
-              --name=rifle_spread_analysis_universal \
+              --name=rifle_spread_analysis \
               --target-arch universal2 \
               main.py
             
             mkdir -p release
-            mv dist/rifle_spread_analysis_universal release/rifle_spread_analysis-macos-universal
-            
-            # Create separate arm64 and x86_64 copies
-            cp release/rifle_spread_analysis-macos-universal release/rifle_spread_analysis-macos-arm64
-            cp release/rifle_spread_analysis-macos-universal release/rifle_spread_analysis-macos-x86_64
+            cp dist/rifle_spread_analysis release/rifle_spread_analysis-macos-universal
+            cp dist/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
+            cp dist/rifle_spread_analysis release/rifle_spread_analysis-macos-x86_64
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
             pyinstaller --onefile --name=rifle_spread_analysis main.py
             mkdir -p release
