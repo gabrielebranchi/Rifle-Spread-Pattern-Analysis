@@ -17,10 +17,11 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        shell: bash
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=v${VERSION}" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,65 +38,49 @@ jobs:
       - name: Build macOS universal binary
         if: runner.os == 'macOS'
         run: |
-          # Create separate build environments
+          VERSION=${{ steps.version.outputs.VERSION }}
+          mkdir -p release/v${VERSION}
+          
+          # ARM64 build
           python -m venv arm64_env
           source arm64_env/bin/activate
           pip install numpy pillow pyinstaller -r requirements.txt
-          python -m PyInstaller \
-            --onefile \
-            --name=RSPA \
-            --target-arch arm64 \
-            --distpath arm64_dist \
-            --workpath arm64_build \
-            main.py
+          python -m PyInstaller --onefile --name=RSPA --distpath=arm64_dist main.py
           deactivate
           
+          # x86_64 build
           python -m venv x86_env
           source x86_env/bin/activate
           arch -x86_64 pip install numpy pillow pyinstaller -r requirements.txt
-          arch -x86_64 python -m PyInstaller \
-            --onefile \
-            --name=RSPA \
-            --target-arch x86_64 \
-            --distpath x86_dist \
-            --workpath x86_build \
-            main.py
+          arch -x86_64 python -m PyInstaller --onefile --name=RSPA --distpath=x86_dist main.py
           deactivate
           
-          # Create versioned release directory
-          mkdir -p release/v${{ steps.version.outputs.version }}
-          
-          # Create universal binary using lipo
-          lipo -create \
-            -output release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-universal \
-            arm64_dist/RSPA \
-            x86_dist/RSPA
-          
-          # Create architecture-specific copies
-          cp arm64_dist/RSPA release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-arm64
-          cp x86_dist/RSPA release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-x86_64
-          
-          # Make executable
-          chmod +x release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-macos-*
+          # Combine binaries
+          lipo -create -output release/v${VERSION}/RSPA-${VERSION}-macos-universal arm64_dist/RSPA x86_dist/RSPA
+          cp arm64_dist/RSPA release/v${VERSION}/RSPA-${VERSION}-macos-arm64
+          cp x86_dist/RSPA release/v${VERSION}/RSPA-${VERSION}-macos-x86_64
+          chmod +x release/v${VERSION}/RSPA-${VERSION}-macos-*
 
       - name: Build Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $VERSION = "${{ steps.version.outputs.VERSION }}"
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt
           pyinstaller --onefile --name=RSPA main.py
-          mkdir -p release/v${{ steps.version.outputs.version }}
-          Move-Item dist/RSPA.exe release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-windows-x86_64.exe
+          New-Item -ItemType Directory -Path "release/v$VERSION" -Force
+          Move-Item dist/RSPA.exe "release/v$VERSION/RSPA-$VERSION-windows-x86_64.exe"
 
       - name: Build Linux executable
         if: runner.os == 'Linux'
         run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt
           pyinstaller --onefile --name=RSPA main.py
-          mkdir -p release/v${{ steps.version.outputs.version }}
-          mv dist/RSPA release/v${{ steps.version.outputs.version }}/RSPA-${{ steps.version.outputs.version }}-linux-x86_64
+          mkdir -p release/v${VERSION}
+          mv dist/RSPA release/v${VERSION}/RSPA-${VERSION}-linux-x86_64
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -116,16 +101,14 @@ jobs:
 
       - name: Combine artifacts
         run: |
-          # Create versioned release directory
-          mkdir -p release/v${{ needs.build.outputs.version }}
-          
-          # Find and copy all versioned assets
-          find artifacts -name "RSPA-*" -exec cp {} release/v${{ needs.build.outputs.version }}/ \;
+          VERSION=${{ needs.build.outputs.VERSION }}
+          mkdir -p release/v${VERSION}
+          find artifacts -name "RSPA-*" -exec cp {} release/v${VERSION}/ \;
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ needs.build.outputs.version }}
-          files: release/v${{ needs.build.outputs.version }}/*
+          tag_name: v${{ needs.build.outputs.VERSION }}
+          files: release/v${{ needs.build.outputs.VERSION }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
