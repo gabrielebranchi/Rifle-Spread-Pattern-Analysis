@@ -23,7 +23,7 @@ Questo software permette di analizzare un'immagine di un bersaglio e rilevare i 
 
 Puoi installare le dipendenze con il comando:
 ```sh
-pip install opencv-python numpy Pillow
+pip install requirements.txt
 ```
 
 Tkinter, math, threading and random sono integrate con ogni installazione di Python,
