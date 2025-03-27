@@ -23,7 +23,14 @@ jobs:
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
         run: |
-          brew install libtiff libjpeg webp little-cms2 openssl@1.1
+          # Install only if not already present
+          brew list libtiff &>/dev/null || brew install libtiff
+          brew list libjpeg &>/dev/null || brew install libjpeg
+          brew list webp &>/dev/null || brew install webp
+          brew list little-cms2 &>/dev/null || brew install little-cms2
+          brew list openssl@1.1 &>/dev/null || brew install openssl@1.1
+          
+          # Set environment variables
           export LDFLAGS="-L$(brew --prefix openssl@1.1)/lib"
           export CPPFLAGS="-I$(brew --prefix openssl@1.1)/include"
 
