@@ -20,62 +20,66 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r requirements.txt
+          brew install libtiff libjpeg webp little-cms2 openssl@1.1
+          export LDFLAGS="-L$(brew --prefix openssl@1.1)/lib"
+          export CPPFLAGS="-I$(brew --prefix openssl@1.1)/include"
 
-      - name: Install dependencies (macOS/Linux)
-        if: runner.os != 'Windows'
-        shell: bash
+      - name: Install Python dependencies (macOS)
+        if: runner.os == 'macOS'
         run: |
           python -m pip install --upgrade pip
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            brew install libtiff libjpeg webp little-cms2 openssl@1.1
-            export LDFLAGS="-L$(brew --prefix openssl@1.1)/lib"
-            export CPPFLAGS="-I$(brew --prefix openssl@1.1)/include"
-            export ARCHFLAGS="-arch arm64 -arch x86_64"
-            pip install numpy --no-binary numpy --force-reinstall
-            pip install pillow --no-binary pillow --force-reinstall
-          fi
+          # Install numpy and pillow normally (will be arm64 by default)
+          pip install numpy pillow
           pip install pyinstaller -r requirements.txt
 
-      - name: Build executable (Windows)
+      - name: Build macOS universal binary
+        if: runner.os == 'macOS'
+        run: |
+          # Create separate build environments
+          python -m venv arm64_env
+          source arm64_env/bin/activate
+          pip install numpy pillow pyinstaller -r requirements.txt
+          python -m PyInstaller --onefile --name=rifle_spread_analysis_arm --target-arch arm64 main.py
+          deactivate
+          
+          python -m venv x86_env
+          source x86_env/bin/activate
+          arch -x86_64 pip install numpy pillow pyinstaller -r requirements.txt
+          arch -x86_64 python -m PyInstaller --onefile --name=rifle_spread_analysis_x86 --target-arch x86_64 main.py
+          deactivate
+          
+          # Create universal binary using lipo
+          mkdir -p release
+          lipo -create \
+            -output release/rifle_spread_analysis-macos-universal \
+            arm64_env/dist/rifle_spread_analysis_arm \
+            x86_env/dist/rifle_spread_analysis_x86
+          
+          # Create architecture-specific copies
+          cp arm64_env/dist/rifle_spread_analysis_arm release/rifle_spread_analysis-macos-arm64
+          cp x86_env/dist/rifle_spread_analysis_x86 release/rifle_spread_analysis-macos-x86_64
+          
+          # Make executable
+          chmod +x release/rifle_spread_analysis-macos-*
+
+      - name: Build Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller -r requirements.txt
           pyinstaller --onefile --name=rifle_spread_analysis main.py
           mkdir -p release
           Move-Item dist/rifle_spread_analysis.exe release/rifle_spread_analysis-windows-x86_64.exe
 
-      - name: Build executable (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          # Verify numpy is universal
-          file $(python -c "import numpy._core._multiarray_umath; print(numpy._core._multiarray_umath.__file__)")
-          
-          # Build universal binary
-          python -m PyInstaller \
-            --onefile \
-            --name=rifle_spread_analysis \
-            --target-arch universal2 \
-            --workpath build_macos \
-            --distpath dist_macos \
-            main.py
-          
-          mkdir -p release
-          cp dist_macos/rifle_spread_analysis release/rifle_spread_analysis-macos-universal
-          cp dist_macos/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
-          cp dist_macos/rifle_spread_analysis release/rifle_spread_analysis-macos-x86_64
-
-      - name: Build executable (Linux)
+      - name: Build Linux executable
         if: runner.os == 'Linux'
-        shell: bash
         run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller -r requirements.txt
           pyinstaller --onefile --name=rifle_spread_analysis main.py
           mkdir -p release
           mv dist/rifle_spread_analysis release/rifle_spread_analysis-linux-x86_64
