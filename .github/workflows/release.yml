@@ -9,33 +9,39 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
         include:
           - os: macos-latest
             artifact: macx-arm64-Release.dmg
-            build_script: build-mac-arm64.sh
+            build_script: scripts/build-mac-arm64.sh
           - os: macos-latest
             artifact: macx-x86_64-Release.dmg
-            build_script: build-mac-x86.sh
+            build_script: scripts/build-mac-x86.sh
           - os: windows-latest
             artifact: win64-Release.exe
-            build_script: build-windows.ps1
+            build_script: scripts/build-windows.ps1
           - os: ubuntu-latest
             artifact: x86_64-Release.AppImage
-            build_script: build-linux.sh
+            build_script: scripts/build-linux.sh
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Set up build environment
         run: |
-          echo "Setting up build environment..."
-          # Add your environment setup commands here
-          # For example:
-          # brew install packages (on macOS)
-          # sudo apt-get install packages (on Ubuntu)
-          # choco install packages (on Windows)
+          echo "Setting up build environment for ${{ runner.os }}..."
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            brew update
+            brew install cmake
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+          fi
       
       - name: Make build script executable (Linux/Mac)
         if: runner.os != 'Windows'
@@ -43,36 +49,33 @@ jobs:
       
       - name: Build artifact
         run: |
-          echo "Running build script..."
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            powershell ./${{ matrix.build_script }}
+          echo "Running build script: ${{ matrix.build_script }}"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            pwsh -Command "& { ${{ matrix.build_script }}"
           else
-            ./${{ matrix.build_script }}
+            ${{ matrix.build_script }}
           fi
           
-      - name: Rename artifact
-        run: |
-          mv built-artifact Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
-          
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
-          path: Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
+          path: ${{ github.workspace }}/build/Spread_Pattern_Analysis-v${{ github.ref_name }}-${{ matrix.artifact }}
 
   release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
           
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref }}
           release_name: Release v${{ github.ref_name }}
