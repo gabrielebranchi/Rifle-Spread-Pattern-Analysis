@@ -27,16 +27,17 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build executable
+        shell: bash  # Force Bash on Windows (or use `pwsh` for PowerShell)
         run: |
           pyinstaller --onefile --name=rifle_spread_analysis main.py
-          mkdir release
+          mkdir -p release
           
           # Rename based on OS
-          if [ "$RUNNER_OS" = "Windows" ]; then
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
             mv dist/rifle_spread_analysis.exe release/rifle_spread_analysis-windows-x86_64.exe
-          elif [ "$RUNNER_OS" = "macOS" ]; then
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
             # Check if it's ARM64 or x86_64
-            if [ "$(uname -m)" = "arm64" ]; then
+            if [[ "$(uname -m)" == "arm64" ]]; then
               mv dist/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
             else
               mv dist/rifle_spread_analysis release/rifle_spread_analysis-macos-x86_64
@@ -62,7 +63,7 @@ jobs:
 
       - name: Combine artifacts
         run: |
-          mkdir combined-release
+          mkdir -p combined-release
           find artifacts -type f -exec cp {} combined-release/ \;
 
       - name: Create GitHub Release
