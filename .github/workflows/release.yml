@@ -27,20 +27,21 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build executable
-        shell: bash  # Force Bash for consistent syntax
+        shell: bash
         run: |
           pyinstaller --onefile --name=rifle_spread_analysis main.py
           mkdir -p release
           
-          # Rename based on OS/Architecture
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             mv dist/rifle_spread_analysis.exe release/rifle_spread_analysis-windows-x86_64.exe
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            if [[ "$(uname -m)" == "arm64" ]]; then
-              mv dist/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
-            else
-              mv dist/rifle_spread_analysis release/rifle_spread_analysis-macos-x86_64
-            fi
+            # Native ARM64 build
+            mv dist/rifle_spread_analysis release/rifle_spread_analysis-macos-arm64
+            
+            # Build x86_64 binary using Rosetta 2
+            echo "Building x86_64 version..."
+            arch -x86_64 python -m PyInstaller --onefile --name=rifle_spread_analysis_x86 main.py
+            mv dist/rifle_spread_analysis_x86 release/rifle_spread_analysis-macos-x86_64
           else  # Linux
             mv dist/rifle_spread_analysis release/rifle_spread_analysis-linux-x86_64
           fi
@@ -55,7 +56,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required to create releases
+      contents: write
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
